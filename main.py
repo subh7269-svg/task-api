@@ -2,8 +2,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
+from typing import Optional
 
-app = FastAPI()
+app = FastAPI(
+    title="Task API",
+    version="1.0"
+)
 
 
 # =========================
@@ -15,8 +19,8 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    title: str
-    done: bool
+    title: Optional[str] = None
+    done: Optional[bool] = None
 
 
 # =========================
@@ -30,7 +34,9 @@ async def validation_exception_handler(
 ):
     return JSONResponse(
         status_code=400,
-        content={"error": "title is required"}
+        content={
+            "error": "Invalid request body"
+        }
     )
 
 
@@ -58,11 +64,13 @@ tasks = [
 
 
 # =========================
-# Stage 1
-# Root Endpoint
+# GET /
 # =========================
 
-@app.get("/", description="Get information about the Task API")
+@app.get(
+    "/",
+    description="Get information about the Task API"
+)
 def root():
     return {
         "name": "Task API",
@@ -72,11 +80,13 @@ def root():
 
 
 # =========================
-# Stage 1
-# Health Endpoint
+# GET /health
 # =========================
 
-@app.get("/health", description="Check whether the API is running")
+@app.get(
+    "/health",
+    description="Check whether the API is running"
+)
 def health():
     return {
         "status": "ok"
@@ -84,24 +94,29 @@ def health():
 
 
 # =========================
-# Stage 2
-# Get All Tasks
+# GET /tasks
 # =========================
 
-@app.get("/tasks", description="Get all tasks")
+@app.get(
+    "/tasks",
+    description="Get all tasks"
+)
 def get_tasks():
     return tasks
 
 
 # =========================
-# Stage 2
-# Get Single Task
+# GET /tasks/{id}
 # =========================
 
-@app.get("/tasks/{id}", description="Get a task by ID")
+@app.get(
+    "/tasks/{id}",
+    description="Get a task by ID"
+)
 def get_task(id: int):
 
     for task in tasks:
+
         if task["id"] == id:
             return task
 
@@ -114,8 +129,7 @@ def get_task(id: int):
 
 
 # =========================
-# Stage 3
-# Create Task
+# POST /tasks
 # =========================
 
 @app.post(
@@ -125,8 +139,9 @@ def get_task(id: int):
 )
 def create_task(task: TaskCreate):
 
-    # Check for empty title
+    # Check empty title
     if not task.title.strip():
+
         return JSONResponse(
             status_code=400,
             content={
@@ -136,26 +151,25 @@ def create_task(task: TaskCreate):
 
     # Generate next ID
     new_id = max(
-        [t["id"] for t in tasks],
+        [task["id"] for task in tasks],
         default=0
     ) + 1
 
-    # Create new task
+    # Create task
     new_task = {
         "id": new_id,
         "title": task.title,
         "done": False
     }
 
-    # Add task to list
+    # Add task
     tasks.append(new_task)
 
     return new_task
 
 
 # =========================
-# Stage 4
-# Update Task
+# PUT /tasks/{id}
 # =========================
 
 @app.put(
@@ -167,15 +181,45 @@ def update_task(
     task_update: TaskUpdate
 ):
 
+    # Find task
     for task in tasks:
 
         if task["id"] == id:
 
-            task["title"] = task_update.title
-            task["done"] = task_update.done
+            # Check that at least one field was provided
+            if (
+                task_update.title is None
+                and task_update.done is None
+            ):
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Provide title or done"
+                    }
+                )
+
+            # Update title if provided
+            if task_update.title is not None:
+
+                if not task_update.title.strip():
+
+                    return JSONResponse(
+                        status_code=400,
+                        content={
+                            "error": "title must not be empty"
+                        }
+                    )
+
+                task["title"] = task_update.title
+
+            # Update done if provided
+            if task_update.done is not None:
+
+                task["done"] = task_update.done
 
             return task
 
+    # Task not found
     return JSONResponse(
         status_code=404,
         content={
@@ -185,12 +229,12 @@ def update_task(
 
 
 # =========================
-# Stage 4
-# Delete Task
+# DELETE /tasks/{id}
 # =========================
 
 @app.delete(
     "/tasks/{id}",
+    status_code=204,
     description="Delete a task"
 )
 def delete_task(id: int):
@@ -201,9 +245,7 @@ def delete_task(id: int):
 
             tasks.remove(task)
 
-            return {
-                "message": f"Task {id} deleted"
-            }
+            return
 
     return JSONResponse(
         status_code=404,
