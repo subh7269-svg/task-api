@@ -1,7 +1,22 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi import Request
+from pydantic import BaseModel
 
 app = FastAPI()
+
+
+class TaskCreate(BaseModel):
+    title: str
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=400,
+        content={"error": "title is required"}
+    )
 
 
 @app.get("/", description="Get information about the Task API")
@@ -54,3 +69,24 @@ def get_task(id: int):
         status_code=404,
         content={"error": f"Task {id} not found"}
     )
+
+
+@app.post("/tasks", status_code=201, description="Create a new task")
+def create_task(task: TaskCreate):
+    if not task.title.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "title must not be empty"}
+        )
+
+    new_id = max([t["id"] for t in tasks], default=0) + 1
+
+    new_task = {
+        "id": new_id,
+        "title": task.title,
+        "done": False
+    }
+
+    tasks.append(new_task)
+
+    return new_task
