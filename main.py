@@ -1,39 +1,42 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-from fastapi import Request
 from pydantic import BaseModel
 
 app = FastAPI()
 
 
+# =========================
+# Request Models
+# =========================
+
 class TaskCreate(BaseModel):
     title: str
 
 
+class TaskUpdate(BaseModel):
+    title: str
+    done: bool
+
+
+# =========================
+# Validation Error Handler
+# =========================
+
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError
+):
     return JSONResponse(
         status_code=400,
         content={"error": "title is required"}
     )
 
 
-@app.get("/", description="Get information about the Task API")
-def root():
-    return {
-        "name": "Task API",
-        "version": "1.0",
-        "endpoints": ["/tasks"]
-    }
-
-
-@app.get("/health", description="Check whether the API is running")
-def health():
-    return {
-        "status": "ok"
-    }
-
+# =========================
+# In-Memory Task Data
+# =========================
 
 tasks = [
     {
@@ -54,39 +57,157 @@ tasks = [
 ]
 
 
+# =========================
+# Stage 1
+# Root Endpoint
+# =========================
+
+@app.get("/", description="Get information about the Task API")
+def root():
+    return {
+        "name": "Task API",
+        "version": "1.0",
+        "endpoints": ["/tasks"]
+    }
+
+
+# =========================
+# Stage 1
+# Health Endpoint
+# =========================
+
+@app.get("/health", description="Check whether the API is running")
+def health():
+    return {
+        "status": "ok"
+    }
+
+
+# =========================
+# Stage 2
+# Get All Tasks
+# =========================
+
 @app.get("/tasks", description="Get all tasks")
 def get_tasks():
     return tasks
 
 
+# =========================
+# Stage 2
+# Get Single Task
+# =========================
+
 @app.get("/tasks/{id}", description="Get a task by ID")
 def get_task(id: int):
+
     for task in tasks:
         if task["id"] == id:
             return task
 
     return JSONResponse(
         status_code=404,
-        content={"error": f"Task {id} not found"}
+        content={
+            "error": f"Task {id} not found"
+        }
     )
 
 
-@app.post("/tasks", status_code=201, description="Create a new task")
+# =========================
+# Stage 3
+# Create Task
+# =========================
+
+@app.post(
+    "/tasks",
+    status_code=201,
+    description="Create a new task"
+)
 def create_task(task: TaskCreate):
+
+    # Check for empty title
     if not task.title.strip():
         return JSONResponse(
             status_code=400,
-            content={"error": "title must not be empty"}
+            content={
+                "error": "title must not be empty"
+            }
         )
 
-    new_id = max([t["id"] for t in tasks], default=0) + 1
+    # Generate next ID
+    new_id = max(
+        [t["id"] for t in tasks],
+        default=0
+    ) + 1
 
+    # Create new task
     new_task = {
         "id": new_id,
         "title": task.title,
         "done": False
     }
 
+    # Add task to list
     tasks.append(new_task)
 
     return new_task
+
+
+# =========================
+# Stage 4
+# Update Task
+# =========================
+
+@app.put(
+    "/tasks/{id}",
+    description="Update a task"
+)
+def update_task(
+    id: int,
+    task_update: TaskUpdate
+):
+
+    for task in tasks:
+
+        if task["id"] == id:
+
+            task["title"] = task_update.title
+            task["done"] = task_update.done
+
+            return task
+
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": f"Task {id} not found"
+        }
+    )
+
+
+# =========================
+# Stage 4
+# Delete Task
+# =========================
+
+@app.delete(
+    "/tasks/{id}",
+    description="Delete a task"
+)
+def delete_task(id: int):
+
+    for task in tasks:
+
+        if task["id"] == id:
+
+            tasks.remove(task)
+
+            return {
+                "message": f"Task {id} deleted"
+            }
+
+    return JSONResponse(
+        status_code=404,
+        content={
+            "error": f"Task {id} not found"
+        }
+    )
