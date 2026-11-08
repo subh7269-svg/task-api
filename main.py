@@ -8,8 +8,11 @@ from database import (
     init_db,
     get_all_tasks,
     get_task_by_id,
-    create_task
+    create_task,
+    update_task,
+    delete_task
 )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -175,84 +178,78 @@ def create_new_task(task: TaskCreate):
 # PUT /tasks/{id}
 # =========================
 
+
 @app.put(
     "/tasks/{id}",
     description="Update a task"
 )
-def update_task(
+def update_existing_task(
     id: int,
     task_update: TaskUpdate
 ):
 
-    # Find task
-    for task in tasks:
+    # Validate that at least one field is provided
+    if (
+        task_update.title is None
+        and task_update.done is None
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "Provide title or done"
+            }
+        )
 
-        if task["id"] == id:
+    # Validate empty title
+    if (
+        task_update.title is not None
+        and not task_update.title.strip()
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "title must not be empty"
+            }
+        )
 
-            # Check that at least one field was provided
-            if (
-                task_update.title is None
-                and task_update.done is None
-            ):
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "error": "Provide title or done"
-                    }
-                )
-
-            # Update title if provided
-            if task_update.title is not None:
-
-                if not task_update.title.strip():
-
-                    return JSONResponse(
-                        status_code=400,
-                        content={
-                            "error": "title must not be empty"
-                        }
-                    )
-
-                task["title"] = task_update.title
-
-            # Update done if provided
-            if task_update.done is not None:
-
-                task["done"] = task_update.done
-
-            return task
-
-    # Task not found
-    return JSONResponse(
-        status_code=404,
-        content={
-            "error": f"Task {id} not found"
-        }
+    updated = update_task(
+        id,
+        task_update.title,
+        task_update.done
     )
+
+    if updated is None:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": f"Task {id} not found"
+            }
+        )
+
+    return updated
+
 
 
 # =========================
 # DELETE /tasks/{id}
 # =========================
 
+
 @app.delete(
     "/tasks/{id}",
     status_code=204,
     description="Delete a task"
 )
-def delete_task(id: int):
+def delete_existing_task(id: int):
 
-    for task in tasks:
+    deleted = delete_task(id)
 
-        if task["id"] == id:
+    if not deleted:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": f"Task {id} not found"
+            }
+        )
 
-            tasks.remove(task)
-
-            return
-
-    return JSONResponse(
-        status_code=404,
-        content={
-            "error": f"Task {id} not found"
-        }
-    )
+    return None
