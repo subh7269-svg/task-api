@@ -3,12 +3,19 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from typing import Optional
+from contextlib import asynccontextmanager
+from database import init_db, get_all_tasks, get_task_by_id
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
 
 app = FastAPI(
     title="Task API",
-    version="1.0"
+    version="1.0",
+    lifespan=lifespan
 )
-
 
 # =========================
 # Request Models
@@ -96,13 +103,13 @@ def health():
 # =========================
 # GET /tasks
 # =========================
-
 @app.get(
     "/tasks",
     description="Get all tasks"
 )
 def get_tasks():
-    return tasks
+
+    return get_all_tasks()
 
 
 # =========================
@@ -115,17 +122,17 @@ def get_tasks():
 )
 def get_task(id: int):
 
-    for task in tasks:
+    task = get_task_by_id(id)
 
-        if task["id"] == id:
-            return task
+    if task is None:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "Task not found"
+            }
+        )
 
-    return JSONResponse(
-        status_code=404,
-        content={
-            "error": f"Task {id} not found"
-        }
-    )
+    return task
 
 
 # =========================
