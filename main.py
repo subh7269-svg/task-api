@@ -4,7 +4,12 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from typing import Optional
 from contextlib import asynccontextmanager
-from database import init_db, get_all_tasks, get_task_by_id
+from database import (
+    init_db,
+    get_all_tasks,
+    get_task_by_id,
+    create_task
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -144,11 +149,10 @@ def get_task(id: int):
     status_code=201,
     description="Create a new task"
 )
-def create_task(task: TaskCreate):
+def create_new_task(task: TaskCreate):
 
-    # Check empty title
+    # Validate empty title
     if not task.title.strip():
-
         return JSONResponse(
             status_code=400,
             content={
@@ -156,18 +160,10 @@ def create_task(task: TaskCreate):
             }
         )
 
-    # Generate next ID
-    new_id = max(
-        [task["id"] for task in tasks],
-        default=0
-    ) + 1
+    # Save task in SQLite
+    new_task = create_task(task.title)
 
-    # Create task
-    new_task = {
-        "id": new_id,
-        "title": task.title,
-        "done": False
-    }
+    return new_task
 
     # Add task
     tasks.append(new_task)
